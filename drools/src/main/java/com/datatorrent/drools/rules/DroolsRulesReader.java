@@ -34,49 +34,46 @@ import org.apache.hadoop.fs.Path;
 
 public class DroolsRulesReader implements AbstractRulesReader
 {
-  private static Logger LOG = LoggerFactory.getLogger(DroolsRulesReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DroolsRulesReader.class);
+  static final String RESOURCES_ROOT = "src/main/resources/";
 
   @Override
   public void loadRulesFromDirectory(String rulesDir) throws IOException
   {
-    KieFileSystem kieFileSystem = getKieFileSystem();
-    FileSystem sourceFileSystem = getFSInstance(rulesDir);
-
     Path rulesDirPath = new Path(rulesDir);
-    loadRulesInKieFileSystem(kieFileSystem, sourceFileSystem, sourceFileSystem.listStatus(rulesDirPath));
+    FileSystem sourceFileSystem = getFSInstance(rulesDirPath);
+
+    loadRulesInKieFileSystem(sourceFileSystem, sourceFileSystem.listStatus(rulesDirPath));
   }
 
   @Override
   public void loadRulesFromFiles(String[] ruleFiles) throws IOException
   {
-    KieFileSystem kieFileSystem = getKieFileSystem();
-    FileSystem sourceFileSystem = getFSInstance(ruleFiles[0]);
-
+    FileSystem sourceFileSystem = getFSInstance(new Path(ruleFiles[0]));
     FileStatus[] rulesfileStatus = new FileStatus[ruleFiles.length];
     int i = 0;
     for (String ruleFile : ruleFiles) {
       rulesfileStatus[i++] = sourceFileSystem.getFileStatus(new Path(ruleFile));
     }
 
-    loadRulesInKieFileSystem(kieFileSystem, sourceFileSystem, rulesfileStatus);
+    loadRulesInKieFileSystem(sourceFileSystem, rulesfileStatus);
   }
 
   /**
    * Load rules from given source {@link FileSystem} in {@link KieFileSystem}
-   * 
    * @param kieFileSystem
    * @param sourceFileSystem
    * @param ruleFiles
    * @throws IOException
    */
-  protected void loadRulesInKieFileSystem(KieFileSystem kieFileSystem, FileSystem sourceFileSystem,
-      FileStatus[] ruleFiles) throws IOException
+  protected void loadRulesInKieFileSystem(FileSystem sourceFileSystem, FileStatus[] ruleFiles) throws IOException
   {
     KieServices kieServices = KieServices.Factory.get();
+    KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
     for (FileStatus rulesFileStatus : ruleFiles) {
       if (rulesFileStatus.isFile()) {
         InputStream rulesFileStream = sourceFileSystem.open(rulesFileStatus.getPath());
-        kieFileSystem.write("src/main/resources/" + rulesFileStatus.getPath().getName(),
+        kieFileSystem.write(RESOURCES_ROOT + rulesFileStatus.getPath().getName(),
             new InputStreamResource(rulesFileStream));
       }
     }
@@ -89,24 +86,16 @@ public class DroolsRulesReader implements AbstractRulesReader
     }
   }
 
-  protected KieFileSystem getKieFileSystem()
-  {
-    KieServices kieServices = KieServices.Factory.get();
-    KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
-    return kieFileSystem;
-  }
-
   /**
    * Get {@link FileSystem} instance of file system having rules
    * @param rulesFile
    * @return fileSystem
    * @throws IOException
    */
-  protected FileSystem getFSInstance(String rulesFile) throws IOException
+  protected FileSystem getFSInstance(Path rulesFile) throws IOException
   {
-    Path filePath = new Path(rulesFile);
     Configuration configuration = new Configuration();
-    FileSystem fs = FileSystem.newInstance(filePath.toUri(), configuration);
+    FileSystem fs = FileSystem.newInstance(rulesFile.toUri(), configuration);
     return fs;
   }
 }

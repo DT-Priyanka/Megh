@@ -74,6 +74,9 @@ public class DroolsRulesReaderTest
       file = new File(classLoader.getResource("rules/" + goldRuleFileName).getFile());
       rulesFile = new File(rulesDirectory, goldRuleFileName);
       FileUtils.copyFile(file, rulesFile);
+      file = new File(classLoader.getResource("rules/" + "ShopRules.xls").getFile());
+      rulesFile = new File(rulesDirectory, "ShopRules.xls");
+      FileUtils.copyFile(file, rulesFile);
     }
   }
 
@@ -88,16 +91,19 @@ public class DroolsRulesReaderTest
     KieServices kieServices = KieServices.Factory.get();
     KieContainer kieContainer = kieServices.newKieContainer(kieServices.getRepository().getDefaultReleaseId());
     Collection<KiePackage> packages = kieContainer.getKieBase().getKiePackages();
-    Assert.assertEquals("testRules", packages.iterator().next().getName());
 
-    Iterator<org.kie.api.definition.rule.Rule> rulesItr = packages.iterator().next().getRules().iterator();
     List<String> loadedRules = new ArrayList<>();
-    while (rulesItr.hasNext()) {
-      loadedRules.add(rulesItr.next().getName());
+    for (KiePackage kiePackage : packages) {
+      Iterator<org.kie.api.definition.rule.Rule> rulesItr = kiePackage.getRules().iterator();
+      while (rulesItr.hasNext()) {
+        loadedRules.add(rulesItr.next().getName());
+      }
     }
-    Assert.assertEquals(2, loadedRules.size());
+    Assert.assertEquals(4, loadedRules.size());
     Assert.assertTrue(loadedRules.contains("Offer for Gold"));
     Assert.assertTrue(loadedRules.contains("Offer for Diamond"));
+    Assert.assertTrue(loadedRules.contains("Below 18"));
+    Assert.assertTrue(loadedRules.contains("Above 18"));
   }
 
   @Test
@@ -149,4 +155,5 @@ public class DroolsRulesReaderTest
 
     testMeta.underTest.loadRulesFromFiles(new String[] { rulesFile.getAbsolutePath() });
   }
+
 }
