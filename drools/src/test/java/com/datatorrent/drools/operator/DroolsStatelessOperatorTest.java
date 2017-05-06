@@ -111,7 +111,12 @@ public class DroolsStatelessOperatorTest
     testMeta.underTest.activate(testMeta.context);
     StatelessKieSession session = testMeta.underTest.getKieSession();
     Collection<KiePackage> packages = session.getKieBase().getKiePackages();
-//    System.out.println(packages);
+    List<String> packageNames = new ArrayList<>();
+    for (KiePackage kiePackage : packages) {
+      packageNames.add(kiePackage.getName());
+    }
+    Assert.assertTrue(packageNames.contains("com.datatorrent.drools.rules"));
+    Assert.assertTrue(packageNames.contains("rules"));
   }
 
   @Test
@@ -122,14 +127,92 @@ public class DroolsStatelessOperatorTest
     testMeta.underTest.activate(testMeta.context);
     StatelessKieSession session = testMeta.underTest.getKieSession();
     Collection<KiePackage> packages = session.getKieBase().getKiePackages();
+    List<String> packageNames = new ArrayList<>();
+    for (KiePackage kiePackage : packages) {
+      packageNames.add(kiePackage.getName());
+    }
+    Assert.assertTrue(packageNames.contains("com.datatorrent.drools.rules"));
+    Assert.assertTrue(packageNames.contains("rules"));
+  }
 
-//    for (KiePackage kiePackage : packages) {
-//      System.out.println(kiePackage);
-//      for (org.kie.api.definition.rule.Rule rule : kiePackage.getRules()) {
-//        System.out.println(rule.getName());
-//      }
-//    }
+  @Test
+  public void testListenerRulesMatch()
+  {
+    testMeta.underTest.setLoadSpringSession(true);
+    testMeta.underTest.setSessionName("test-session");
+    testMeta.underTest.activate(testMeta.context);
+    assertWorkingMemoryEmpty();
 
+    List<Object> factsList = getListForRuleMatch();
+    testMeta.underTest.beginWindow(0);
+    for (Object fact : factsList) {
+      testMeta.underTest.factsInput.process(fact);
+    }
+    Assert.assertEquals(0,factsPort.collectedTuples.size());
+    testMeta.underTest.endWindow();
+    Assert.assertEquals(1,ruleCountPort.collectedTuples.size());
+    Assert.assertEquals(1,factsAndFiredRulesPort.collectedTuples.size());
+    //It is expected to get 8 tuples as platinum is added via rules
+    Assert.assertEquals(8,factsPort.collectedTuples.size());
+    Map<Object, List<org.kie.api.definition.rule.Rule>> factsAndFiredRules =
+      (Map<Object, List<org.kie.api.definition.rule.Rule>>)factsAndFiredRulesPort.collectedTuples.get(0);
+    Assert.assertEquals(8,factsAndFiredRules.size());
+    Map<org.kie.api.definition.rule.Rule, Integer> ruleCount =
+      (Map<org.kie.api.definition.rule.Rule, Integer>)ruleCountPort.collectedTuples.get(0);
+    Assert.assertEquals(3,ruleCount.size());
+  }
+
+  @Test
+  public void testListenerNoRulesMatch()
+  {
+    testMeta.underTest.setLoadSpringSession(true);
+    testMeta.underTest.setSessionName("test-session");
+    testMeta.underTest.activate(testMeta.context);
+    assertWorkingMemoryEmpty();
+
+    List<Object> factsList = getListForNoRuleMatch();
+    testMeta.underTest.beginWindow(0);
+    for (Object fact : factsList) {
+      testMeta.underTest.factsInput.process(fact);
+    }
+    testMeta.underTest.endWindow();
+    Assert.assertEquals(1,factsAndFiredRulesPort.collectedTuples.size());
+    Assert.assertEquals(7,factsPort.collectedTuples.size());
+    Assert.assertEquals(1,ruleCountPort.collectedTuples.size());
+    Map<Object, List<org.kie.api.definition.rule.Rule>> factsAndFiredRules =
+      (Map<Object, List<org.kie.api.definition.rule.Rule>>)factsAndFiredRulesPort.collectedTuples.get(0);
+    Assert.assertEquals(7,factsAndFiredRules.size());
+    Map<org.kie.api.definition.rule.Rule, Integer> ruleCount =
+      (Map<org.kie.api.definition.rule.Rule, Integer>)ruleCountPort.collectedTuples.get(0);
+    Assert.assertEquals(0,ruleCount.size());
+  }
+
+  @Test
+  public void testListenerRulesMatchBatch()
+  {
+    testMeta.underTest.setLoadSpringSession(true);
+    testMeta.underTest.setSessionName("test-session");
+    testMeta.underTest.activate(testMeta.context);
+    assertWorkingMemoryEmpty();
+
+    List<Object> factsList = getListForRuleMatch();
+    testMeta.underTest.setBatchSize(5);
+    testMeta.underTest.beginWindow(0);
+    for (Object fact : factsList) {
+      testMeta.underTest.factsInput.process(fact);
+    }
+    Assert.assertEquals(6,factsPort.collectedTuples.size());
+    testMeta.underTest.endWindow();
+    Assert.assertEquals(1,ruleCountPort.collectedTuples.size());
+    Assert.assertEquals(1,factsAndFiredRulesPort.collectedTuples.size());
+    //It is expected to get 8 tuples as platinum is added via rules
+    Assert.assertEquals(8,factsPort.collectedTuples.size());
+    Map<Object, List<org.kie.api.definition.rule.Rule>> factsAndFiredRules =
+      (Map<Object, List<org.kie.api.definition.rule.Rule>>)factsAndFiredRulesPort.collectedTuples.get(0);
+    Assert.assertEquals(8,factsAndFiredRules.size());
+    Map<org.kie.api.definition.rule.Rule, Integer> ruleCount =
+      (Map<org.kie.api.definition.rule.Rule, Integer>)ruleCountPort.collectedTuples.get(0);
+    Assert.assertEquals(3,ruleCount.size());
   }
 
   protected List<Object> getListForRuleMatch()
@@ -162,88 +245,11 @@ public class DroolsStatelessOperatorTest
     return factList;
   }
 
-  @Test
-  public void testListenerRulesMatch()
+  private void assertWorkingMemoryEmpty()
   {
-    testMeta.underTest.setLoadSpringSession(true);
-    testMeta.underTest.setSessionName("test-session");
-    testMeta.underTest.activate(testMeta.context);
     Assert.assertEquals(0,factsAndFiredRulesPort.collectedTuples.size());
     Assert.assertEquals(0,factsPort.collectedTuples.size());
     Assert.assertEquals(0,ruleCountPort.collectedTuples.size());
-    List<Object> factsList = getListForRuleMatch();
-    testMeta.underTest.beginWindow(0);
-    for (Object fact : factsList) {
-      testMeta.underTest.factsInput.process(fact);
-    }
-    Assert.assertEquals(0,factsPort.collectedTuples.size());
-    testMeta.underTest.endWindow();
-    Assert.assertEquals(1,ruleCountPort.collectedTuples.size());
-    Assert.assertEquals(1,factsAndFiredRulesPort.collectedTuples.size());
-    //It is expected to get 8 tuples as platinum is added via rules
-    Assert.assertEquals(8,factsPort.collectedTuples.size());
-    Map<Object, List<org.kie.api.definition.rule.Rule>> factsAndFiredRules =
-      (Map<Object, List<org.kie.api.definition.rule.Rule>>)factsAndFiredRulesPort.collectedTuples.get(0);
-    Assert.assertEquals(8,factsAndFiredRules.size());
-    Map<org.kie.api.definition.rule.Rule, Integer> ruleCount =
-      (Map<org.kie.api.definition.rule.Rule, Integer>)ruleCountPort.collectedTuples.get(0);
-    Assert.assertEquals(3,ruleCount.size());
   }
-
-  @Test
-  public void testListenerNoRulesMatch()
-  {
-    testMeta.underTest.setLoadSpringSession(true);
-    testMeta.underTest.setSessionName("test-session");
-    testMeta.underTest.activate(testMeta.context);
-    Assert.assertEquals(0,factsAndFiredRulesPort.collectedTuples.size());
-    Assert.assertEquals(0,factsPort.collectedTuples.size());
-    Assert.assertEquals(0,ruleCountPort.collectedTuples.size());
-    List<Object> factsList = getListForNoRuleMatch();
-    testMeta.underTest.beginWindow(0);
-    for (Object fact : factsList) {
-      testMeta.underTest.factsInput.process(fact);
-    }
-    testMeta.underTest.endWindow();
-    Assert.assertEquals(1,factsAndFiredRulesPort.collectedTuples.size());
-    Assert.assertEquals(7,factsPort.collectedTuples.size());
-    Assert.assertEquals(1,ruleCountPort.collectedTuples.size());
-    Map<Object, List<org.kie.api.definition.rule.Rule>> factsAndFiredRules =
-      (Map<Object, List<org.kie.api.definition.rule.Rule>>)factsAndFiredRulesPort.collectedTuples.get(0);
-    Assert.assertEquals(7,factsAndFiredRules.size());
-    Map<org.kie.api.definition.rule.Rule, Integer> ruleCount =
-      (Map<org.kie.api.definition.rule.Rule, Integer>)ruleCountPort.collectedTuples.get(0);
-    Assert.assertEquals(0,ruleCount.size());
-  }
-
-  @Test
-  public void testListenerRulesMatchBatch()
-  {
-    testMeta.underTest.setLoadSpringSession(true);
-    testMeta.underTest.setSessionName("test-session");
-    testMeta.underTest.activate(testMeta.context);
-    Assert.assertEquals(0,factsAndFiredRulesPort.collectedTuples.size());
-    Assert.assertEquals(0,factsPort.collectedTuples.size());
-    Assert.assertEquals(0,ruleCountPort.collectedTuples.size());
-    List<Object> factsList = getListForRuleMatch();
-    testMeta.underTest.setBatchSize(5);
-    testMeta.underTest.beginWindow(0);
-    for (Object fact : factsList) {
-      testMeta.underTest.factsInput.process(fact);
-    }
-    Assert.assertEquals(6,factsPort.collectedTuples.size());
-    testMeta.underTest.endWindow();
-    Assert.assertEquals(1,ruleCountPort.collectedTuples.size());
-    Assert.assertEquals(1,factsAndFiredRulesPort.collectedTuples.size());
-    //It is expected to get 8 tuples as platinum is added via rules
-    Assert.assertEquals(8,factsPort.collectedTuples.size());
-    Map<Object, List<org.kie.api.definition.rule.Rule>> factsAndFiredRules =
-      (Map<Object, List<org.kie.api.definition.rule.Rule>>)factsAndFiredRulesPort.collectedTuples.get(0);
-    Assert.assertEquals(8,factsAndFiredRules.size());
-    Map<org.kie.api.definition.rule.Rule, Integer> ruleCount =
-      (Map<org.kie.api.definition.rule.Rule, Integer>)ruleCountPort.collectedTuples.get(0);
-    Assert.assertEquals(3,ruleCount.size());
-  }
-
 
 }
