@@ -23,6 +23,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestWatcher;
@@ -82,8 +83,9 @@ public class DroolUtilsTest
   @Rule
   public TestMeta testMeta = new TestMeta();
 
+  @Ignore
   @Test
-  public void test() throws IOException
+  public void testAddKjarToClasspath() throws IOException
   {
     DroolUtils.addKjarToClasspath(testMeta.rulesDirectory);
     ClassLoader classLoader = getClass().getClassLoader();

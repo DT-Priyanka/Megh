@@ -68,7 +68,7 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
   private static final int DEFAULT_BATCH_SIZE = 1000;
   public final transient DefaultOutputPort<Object> factsOutput = new DefaultOutputPort<>();
   public final transient DefaultOutputPort<Map<String, Integer>> ruleCountOutput = new DefaultOutputPort<>();
-  public final transient DefaultOutputPort<Map<Object, List<String>>> factAndFiredRulesOutput = new DefaultOutputPort<>();
+  public final transient DefaultOutputPort<ConcurrentMap<Object, List<String>>> factAndFiredRulesOutput = new DefaultOutputPort<>();
   private transient StatelessKieSession kieSession;
   @NotNull
   private String rulesDir;
@@ -86,59 +86,16 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
     {
       facts.add(tuple);
       if (facts.size() >= batchSize) {
-        executeRules();
+        executeRulesAndEmitResults();
       }
     }
   };
 
   @Override
-  public void endWindow()
-  {
-    if (facts.size() > 0) {
-      executeRules();
-    }
-    if (factAndFiredRulesOutput.isConnected()) {
-      factAndFiredRulesOutput.emit(factsAndFiredRules);
-    }
-    if (ruleCountOutput.isConnected()) {
-      ruleCountOutput.emit(ruleCount);
-    }
-  }
-
-  @Override
-  public void beginWindow(long windowId)
-  {
-    if (factAndFiredRulesOutput.isConnected()) {
-      factsAndFiredRules = new ConcurrentHashMap<>();
-    }
-    if (ruleCountOutput.isConnected()) {
-      ruleCount = new HashMap<>();
-    }
-  }
-
-  private void executeRules()
-  {
-    kieSession.execute(facts);
-    for (Object fact : facts) {
-      factsOutput.emit(fact);
-    }
-    for (Object fact : factsFromRules) {
-      factsOutput.emit(fact);
-    }
-    facts.clear();
-    factsFromRules.clear();
-  }
-
-  @Override
-  public void setup(OperatorContext context)
-  {
-    super.setup(context);
-  }
-
-  @Override
   public void activate(OperatorContext context)
   {
     //TODO: save kieBase so that we don't we have saved rules state
+    //TODO: accept GAV from user and use it to initialize container
     if (loadSpringSession) {
       try {
         DroolUtils.addKjarToClasspath(rulesDir);
@@ -158,6 +115,36 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
         kieSession.addEventListener(new RulesFiredListener());
     }
     kieSession.addEventListener(new FactsListener());
+  }
+
+  @Override
+  public void beginWindow(long windowId)
+  {
+    if (factAndFiredRulesOutput.isConnected()) {
+      factsAndFiredRules = new ConcurrentHashMap<>();
+    }
+    if (ruleCountOutput.isConnected()) {
+      ruleCount = new HashMap<>();
+    }
+  }
+
+  @Override
+  public void endWindow()
+  {
+    if (facts.size() > 0) {
+      executeRulesAndEmitResults();
+    }
+    if (factAndFiredRulesOutput.isConnected()) {
+      factAndFiredRulesOutput.emit(factsAndFiredRules);
+    }
+    if (ruleCountOutput.isConnected()) {
+      ruleCountOutput.emit(ruleCount);
+    }
+  }
+
+  @Override
+  public void deactivate()
+  {
   }
 
   private KieContainer initializeKieContainerFromRulesDir()
@@ -180,14 +167,21 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
     return new DroolsRulesReader();
   }
 
-  @Override
-  public void deactivate()
+  private void executeRulesAndEmitResults()
   {
+    kieSession.execute(facts);
+    for (Object fact : facts) {
+      factsOutput.emit(fact);
+    }
+    for (Object fact : factsFromRules) {
+      factsOutput.emit(fact);
+    }
+    facts.clear();
+    factsFromRules.clear();
   }
 
   /**
    * Get rules directory containing rules files e.g. .drl, .xls files
-   *
    * @return rulesDir
    */
   public String getRulesDir()
@@ -197,7 +191,6 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
 
   /**
    * Sets rules directory containing rules files e.g. .drl, .xls files
-   *
    * @param rulesDir
    */
   public void setRulesDir(String rulesDir)
@@ -208,7 +201,6 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
   /**
    * If load kieSession from spring configuration, this reads rules from
    * classpath
-   *
    * @return loadSpringSession
    */
   public boolean isLoadSpringSession()
@@ -219,7 +211,6 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
   /**
    * If load kieSession from spring configuration, this reads rules from
    * classpath
-   *
    * @param loadSpringSession
    */
   public void setLoadSpringSession(boolean loadSpringSession)
@@ -229,7 +220,6 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
 
   /**
    * Get session name to be loaded from spring configuration file
-   *
    * @return sessionName
    */
   public String getSessionName()
@@ -239,7 +229,6 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
 
   /**
    * Set session name to be loaded from spring configuration file
-   *
    * @param sessionName
    */
   public void setSessionName(String sessionName)
@@ -373,7 +362,6 @@ public class DroolsStatelessOperator extends BaseOperator implements ActivationL
      * This method will be called when a fact is inserted in the session.
      * This method will add the inserted fact in factsAndFiredRules Map.
      * When the getRule() will not be null in that case the fact is added via a rule.
-     *
      * @param objectInsertedEvent fact inserted in the session
      */
     @Override
